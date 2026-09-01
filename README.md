@@ -130,4 +130,3 @@ prisma/
 - Workshop details (title, date, price, capacity) live in the database and are
   set by `prisma/seed.ts`.
 
-A student club project by Alexa Developers SRM.
