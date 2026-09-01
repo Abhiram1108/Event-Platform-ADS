@@ -1,0 +1,159 @@
+// Alexa Developers SRM — Event Platform
+// PostgreSQL + Prisma. Auth.js models follow the @auth/prisma-adapter schema.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Pooled connection for the app (Neon PgBouncer).
+  url       = env("DATABASE_URL")
+  // Direct, non-pooled connection for migrations (Neon). For a local Postgres
+  // with no pooler, set DIRECT_URL to the same value as DATABASE_URL.
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Roles
+// ---------------------------------------------------------------------------
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js (Auth.js v5 + @auth/prisma-adapter, database session strategy)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  registrations Registration[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Domain
+// ---------------------------------------------------------------------------
+
+enum RegistrationStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Workshop {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description String   @db.Text
+  date        DateTime
+  location    String
+  // Price is stored in minor units (paise) and is the ONLY source of truth
+  // for the amount charged. The browser never supplies a price.
+  priceMinor  Int
+  currency    String   @default("inr")
+  capacity    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  registrations Registration[]
+}
+
+model Registration {
+  id           String             @id @default(cuid())
+  userId       String
+  workshopId   String
+  fullName     String
+  email        String
+  phone        String
+  organization String
+  status       RegistrationStatus @default(PENDING)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Restrict)
+  payment  Payment?
+
+  // One registration per user per workshop — DB-enforced duplicate protection.
+  @@unique([userId, workshopId])
+  @@index([workshopId])
+  @@index([status])
+}
+
+model Payment {
+  id                      String        @id @default(cuid())
+  registrationId          String        @unique
+  stripeCheckoutSessionId String?       @unique
+  stripePaymentIntentId   String?       @unique
+  // Amount actually charged, copied server-side from Workshop.priceMinor.
+  amountMinor             Int
+  currency                String        @default("inr")
+  status                  PaymentStatus @default(PENDING)
+  // Set once, when the confirmation email is successfully sent — makes the
+  // webhook email step idempotent across Stripe retries.
+  confirmationEmailSentAt DateTime?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
