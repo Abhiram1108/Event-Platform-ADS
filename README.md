@@ -7,6 +7,8 @@ who has registered.
 
 Built with Next.js (App Router), PostgreSQL, and Stripe Checkout in test mode.
 
+**Live:** https://event-platform-ads.vercel.app
+
 ## What it does
 
 - Google / GitHub sign-in (Auth.js, database sessions)
@@ -109,7 +111,11 @@ prisma/
 | `npm run db:seed` | Seed the workshop |
 | `npm run db:studio` | Prisma Studio |
 
-## Deployment (Vercel)
+## Deployment
+
+Deployed on Vercel: **https://event-platform-ads.vercel.app**
+
+To deploy your own:
 
 1. Import the repo into Vercel.
 2. Add all environment variables (Production). Set `AUTH_URL` and
